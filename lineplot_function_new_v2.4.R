@@ -97,7 +97,7 @@ stat_test_perm <- function(hub_first, hub_last, control_first, control_last,
       df_join_pre %>%
       mutate(tier = case_when(k6_tier_sc < 12 & sf6_z_first >= 0.82 ~ "T0",
                               k6_tier_sc < 12 & sf6_z_first < 0.82 ~ "T1",
-                              k6_tier_sc >= 12 & k6_tier_sc <= 14 ~ "T2",
+                              k6_tier_sc >= 12 & k6_tier_sc < 15 ~ "T2",
                               k6_tier_sc >= 15 & k6_tier_sc <= 24 ~ "T3"),
              hub = gsub("[^a-zA-Z]", "", subject_code),
              project = if_else(project == 1, "Hub","Control") %>% 
@@ -129,9 +129,9 @@ stat_test_perm <- function(hub_first, hub_last, control_first, control_last,
       ungroup()
     df_join <- 
       df_join_pre %>%
-      mutate(tier = case_when(k6_tier_sc >= 0 & k6_tier_sc <= 8 ~ "T0",
-                              k6_tier_sc >= 9 & k6_tier_sc <= 10 ~ "T1",
-                              k6_tier_sc >= 12 & k6_tier_sc <= 14 ~ "T2",
+      mutate(tier = case_when(k6_tier_sc >= 0 & k6_tier_sc < 9 ~ "T0",
+                              k6_tier_sc >= 9 & k6_tier_sc < 11 ~ "T1",
+                              k6_tier_sc >= 11 & k6_tier_sc < 15 ~ "T2",
                               k6_tier_sc >= 15 & k6_tier_sc <= 24 ~ "T3"),
              hub = gsub("[^a-zA-Z]", "", subject_code),
              project = if_else(project == 1, "Hub","Control") %>% 
