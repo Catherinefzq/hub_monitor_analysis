@@ -4,8 +4,6 @@
 
 # Version 2.4 updates: 
 # apply to average K6 score as first visit
-# pls keep a column for K6 score (for tier define use) and name it as k6_tier_sc 
-# e.g. df %>% mutate(k6_tier_sc = k6_score)
 
 # Six lists in the output:
 # 1) mean & sample size table (out2[[1]])
@@ -79,7 +77,7 @@ stat_test_perm <- function(hub_first, hub_last, control_first, control_last,
       select(subject_code, var.to.test[2]) %>% 
       left_join(hub_first %>% 
                   janitor::clean_names() %>% 
-                  select(subject_code, var.to.test[1], k6_tier_sc, sf6_z_first),
+                  select(subject_code, var.to.test[1], k6_first, sf6_z_first),
                 by = "subject_code") %>% 
       mutate(project = 1) %>% 
       union_all(
@@ -88,17 +86,17 @@ stat_test_perm <- function(hub_first, hub_last, control_first, control_last,
           select(subject_code, var.to.test[2]) %>% 
           left_join(control_first %>% 
                       janitor::clean_names() %>% 
-                      select(subject_code, var.to.test[1], k6_tier_sc, sf6_z_first),
+                      select(subject_code, var.to.test[1], k6_first, sf6_z_first),
                     by = "subject_code") %>% 
           mutate(project = 0) 
       ) %>% 
       ungroup()
     df_join <- 
       df_join_pre %>%
-      mutate(tier = case_when(k6_tier_sc < 12 & sf6_z_first >= 0.82 ~ "T0",
-                              k6_tier_sc < 12 & sf6_z_first < 0.82 ~ "T1",
-                              k6_tier_sc >= 12 & k6_tier_sc <= 14 ~ "T2",
-                              k6_tier_sc >= 15 & k6_tier_sc <= 24 ~ "T3"),
+      mutate(tier = case_when(k6_first < 12 & sf6_z_first >= 0.82 ~ "T0",
+                              k6_first < 12 & sf6_z_first < 0.82 ~ "T1",
+                              k6_first >= 12 & k6_first <= 14 ~ "T2",
+                              k6_first >= 15 & k6_first <= 24 ~ "T3"),
              hub = gsub("[^a-zA-Z]", "", subject_code),
              project = if_else(project == 1, "Hub","Control") %>% 
                factor(., levels = c("Hub","Control"))) %>% 
@@ -113,7 +111,7 @@ stat_test_perm <- function(hub_first, hub_last, control_first, control_last,
       select(subject_code, var.to.test[2]) %>% 
       left_join(hub_first %>% 
                   janitor::clean_names() %>% 
-                  select(subject_code, var.to.test[1], k6_tier_sc),
+                  select(subject_code, var.to.test[1], k6_first),
                 by = "subject_code") %>% 
       mutate(project = 1) %>% 
       union_all(
@@ -122,22 +120,22 @@ stat_test_perm <- function(hub_first, hub_last, control_first, control_last,
           select(subject_code, var.to.test[2]) %>% 
           left_join(control_first %>% 
                       janitor::clean_names() %>% 
-                      select(subject_code, var.to.test[1], k6_tier_sc),
+                      select(subject_code, var.to.test[1], k6_first),
                     by = "subject_code") %>% 
           mutate(project = 0) 
       ) %>% 
       ungroup()
     df_join <- 
       df_join_pre %>%
-      mutate(tier = case_when(k6_tier_sc >= 0 & k6_tier_sc <= 8 ~ "T0",
-                              k6_tier_sc >= 9 & k6_tier_sc <= 10 ~ "T1",
-                              k6_tier_sc >= 12 & k6_tier_sc <= 14 ~ "T2",
-                              k6_tier_sc >= 15 & k6_tier_sc <= 24 ~ "T3"),
+      mutate(tier = case_when(k6_first >= 0 & k6_first <= 8 ~ "T0",
+                              k6_first >= 9 & k6_first <= 10 ~ "T1",
+                              k6_first >= 12 & k6_first <= 14 ~ "T2",
+                              k6_first >= 15 & k6_first <= 24 ~ "T3"),
              hub = gsub("[^a-zA-Z]", "", subject_code),
              project = if_else(project == 1, "Hub","Control") %>% 
                factor(., levels = c("Hub","Control"))) %>% 
       filter(complete.cases(.) & (tier %in% tier.is)) %>% 
-      arrange(project, desc(k6_tier_sc))
+      arrange(project, desc(k6_first))
   }
     else{
       stop("Error in cart: cart is an logical statement")
