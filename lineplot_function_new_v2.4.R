@@ -4,7 +4,8 @@
 
 # Version 2.4 updates: 
 # apply to average K6 score as first visit
-# pls keep a column for K6 score (for tier define use) and name it as k6_tier_sc 
+## IMPORTANT ##
+# pls keep a column for K6 score (for tier define use) and name it as `k6_tier_sc` 
 # e.g. df %>% mutate(k6_tier_sc = k6_score)
 
 # Six lists in the output:
