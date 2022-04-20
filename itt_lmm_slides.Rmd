@@ -1,0 +1,375 @@
+---
+title: "ITT Liner Mixed Effect Model"
+author: "Catherine"
+date: '`r Sys.Date()`'
+output:
+  xaringan::moon_reader:
+    css: xaringan-themer.css
+    nature:
+      slideNumberFormat: "%current%"
+      highlightStyle: github
+      highlightLines: true
+      ratio: 16:9
+      countIncrementalSlides: true
+---
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+options(servr.daemon = TRUE)
+knitr::opts_chunk$set(dpi= 300, fig.align = 'center')
+```
+
+```{r xaringan-themer, include=FALSE, warning=FALSE}
+library(xaringanthemer); library(tidyverse)
+library(lme4);library(sjPlot);library(gtsummary);
+library(ggpubr)
+load("join_yes_perm1.rdata")
+style_mono_accent(
+  base_color = "#1c5253",
+  header_font_google = google_font("Josefin Sans"),
+  text_font_google   = google_font("Montserrat", "400", "400"),
+  code_font_google   = google_font("Fira Mono"),
+  base_font_size = "16px"
+)
+```
+
+### Descriptive for matched data (N = 1149, bootstrap once)
+.pull-left[
+```{r echo=F}
+#tab_xtab(df_plot$project, df_plot$visit)
+
+df_match %>% 
+  select(-doa_bl, -subject_code, -hub, -k6_tier_sc) %>% 
+  mutate(tier = ifelse(tier %in% c("T0", "T1"), "T1", tier)) %>% 
+  tbl_strata(strata = tier, 
+             .tbl_fun = ~ .x %>% 
+               gtsummary::tbl_summary(by = project,
+                                      statistic = all_continuous() ~ "{mean} ({sd})"))
+```
+]
+.pull-right[
+```{r echo=F}
+df_match %>% 
+  select(-doa_bl, -subject_code, -hub, -k6_tier_sc) %>% 
+  mutate(tier = ifelse(tier %in% c("T0", "T1"), "T1", tier)) %>% 
+  gtsummary::tbl_summary(by = project,statistic = all_continuous() ~ "{mean} ({sd})")
+
+```
+
+]
+
+```{r echo=F, warning=F, include=F}
+df_plot$project <- relevel(df_plot$project, ref = "Control")
+
+lme1 <- lmer(values ~ project*visit + (1|doa_bl) + (1|prof_service), 
+             data = df_plot)
+lme2 <- lmer(values ~ project*visit + (1|doa_bl) + (1|prof_service), data = df_plot %>% filter(tier %in% c("T0", "T1")))
+lme3 <- lmer(values ~ project*visit + (1|doa_bl) + (1|prof_service), data = df_plot %>% filter(tier %in% c("T2")))
+lme4 <- lmer(values ~ project*visit + (1|doa_bl) + (1|prof_service), data = df_plot %>% filter(tier %in% c("T3")))
+```
+
+---
+.pull-left[
+### All tiers
+```{r echo=F}
+plot_model(lme1, type = "pred", terms = c("visit", "project")) +
+  geom_line() +
+  ggtitle("Predicted value of K6") +
+  geom_text(aes(label = round(predicted, 3)), 
+            position = position_dodge(width = 1),
+            vjust = 1) +
+  theme(legend.position = "bottom") + 
+  theme_xaringan()
+```
+
+]
+.pull-right[
+```{r echo=F}
+tab_model(lme1)
+```
+]
+---
+.pull-left[
+### T1
+```{r echo=F}
+plot <- plot_model(lme2, type = "pred", terms = c("visit", "project"))
+plot_model(lme2, type = "pred", terms = c("visit", "project")) +
+  geom_line() +
+  ggtitle("Predicted value of K6") +
+  geom_text(aes(label = round(predicted, 3)), 
+            position = position_dodge(width = 1),
+            vjust = 1) +
+  theme(legend.position = "bottom") + 
+  theme_xaringan()
+```
+
+]
+.pull-right[
+```{r echo=F}
+tab_model(lme2)
+```
+]
+
+---
+.pull-left[
+### T2
+```{r echo=F}
+plot_model(lme3, type = "pred", terms = c("visit", "project")) +
+  geom_line() +
+  ggtitle("Predicted value of K6") +
+  geom_text(aes(label = round(predicted, 3)), 
+            position = position_dodge(width = 1),
+            vjust = 1) +
+  theme(legend.position = "bottom") + 
+  theme_xaringan()
+```
+
+]
+.pull-right[
+```{r echo=F}
+tab_model(lme3)
+```
+]
+
+---
+.pull-left[
+### T3
+```{r echo=F}
+plot_model(lme4, type = "pred", terms = c("visit", "project")) +
+  geom_line() +
+  ggtitle("Predicted value of K6") +
+  geom_text(aes(label = round(predicted, 3)), 
+            position = position_dodge(width = 1),
+            vjust = 1) +
+  theme(legend.position = "bottom") + 
+  theme_xaringan()
+```
+]
+.pull-right[
+```{r echo=F}
+tab_model(lme4)
+```
+]
+---
+### Descriptive for crude data (YES = 1551, Hub = 1225)
+#### Model built using different setting
+- Include all age in hub
+- Add baseline K6 as a random intercept
+- Bootstrapped parameters (100 times)
+
+.pull-left[
+```{r echo=F}
+df_join_pre <- 
+      df_2m_last %>% 
+      janitor::clean_names() %>% 
+      select(subject_code, k6_last) %>% 
+      left_join(df_2m_first %>% 
+                  janitor::clean_names() %>% 
+                  select(subject_code, k6_first, k6_tier_sc, 
+                         doa_bl, prof_service),
+                by = "subject_code") %>% 
+      mutate(project = 1) %>% 
+      union_all(
+        df_yes_3m %>% 
+          janitor::clean_names() %>% 
+          select(subject_code, k6_last) %>% 
+          left_join(df_yes_bl %>% 
+                      janitor::clean_names() %>% 
+                      select(subject_code, k6_first, k6_tier_sc,
+                             doa_bl, prof_service),
+                    by = "subject_code") %>% 
+          mutate(project = 0) 
+      ) %>% 
+      ungroup()
+    df_join <- 
+      df_join_pre %>%
+      mutate(tier = case_when(k6_tier_sc >= 0 & k6_tier_sc < 9 ~ "T0",
+                              k6_tier_sc >= 9 & k6_tier_sc < 11 ~ "T1",
+                              k6_tier_sc >= 11 & k6_tier_sc < 15 ~ "T2",
+                              k6_tier_sc >= 15 & k6_tier_sc <= 24 ~ "T3"),
+             hub = gsub("[^a-zA-Z]", "", subject_code),
+             project = if_else(project == 1, "Hub","Control") %>% 
+               factor(., levels = c("Hub","Control"))) %>% 
+      filter(complete.cases(.)) %>% 
+      arrange(project, desc(k6_tier_sc))
+df_join_flip <- df_join %>% pivot_longer(k6_first:k6_last,
+                     names_to = "visit", values_to = "values") %>% 
+  mutate(visit = factor(visit, levels = c("k6_first", "k6_last")))
+
+df_join_flip$project <- relevel(df_join_flip$project, ref = "Control")
+
+#tab_xtab(df_join_flip$project, df_join_flip$visit)
+df_join %>% 
+  select(-doa_bl, -subject_code, -hub, -k6_tier_sc) %>% 
+  select(k6_first, k6_last, everything()) %>% 
+  mutate(tier = ifelse(tier %in% c("T0", "T1"), "T1", tier)) %>% 
+  tbl_strata(strata = tier, 
+             .tbl_fun = ~ .x %>% 
+               gtsummary::tbl_summary(by = project,
+                                      statistic = all_continuous() 
+                                      ~ "{mean} ({sd})"))
+```
+]
+.pull-right[
+```{r echo=F}
+df_join %>% 
+  select(-doa_bl, -subject_code, -hub, -k6_tier_sc) %>% 
+  select(k6_first, k6_last, everything()) %>% 
+  gtsummary::tbl_summary(by = project, 
+                         statistic = all_continuous() ~ "{mean} ({sd})")
+```
+]
+```{r echo=F, warning=F, include=F}
+lme1 <- lmer(
+  values ~ project*visit + (1|doa_bl) + (1|prof_service) + (1|k6_tier_sc), 
+             data = df_join_flip)
+
+lme2 <- lmer(
+  values ~ project*visit + (1|doa_bl) + (1|prof_service) + (1|k6_tier_sc), 
+             data = df_join_flip %>% filter(tier %in% c("T0", "T1")))
+
+lme3 <- lmer(
+  values ~ project*visit + (1|doa_bl) + (1|prof_service) + (1|k6_tier_sc), 
+             data = df_join_flip %>% filter(tier %in% c("T2")))
+
+lme4 <- lmer(
+  values ~ project*visit + (1|doa_bl) + (1|prof_service) + 
+    (1|k6_tier_sc), 
+             data = df_join_flip %>% filter(tier %in% c("T3")))
+
+```
+---
+### All tiers
+.pull-left[
+```{r echo=F, warning=F}
+set.seed(1234)
+boot <- 
+  parameters::bootstrap_parameters(lme1, iterations = 100, bootstrap = T, test = "p")
+
+boot.df <- tibble(visit = rep(c("k6_first", "k6_last"), 2),
+                  project = rep(c("Hub", "Control"), each = 2),
+                  values = c(
+                    boot$Coefficient[1] + boot$Coefficient[2],
+                    boot$Coefficient[1] + boot$Coefficient[2] + 
+                      boot$Coefficient[3] + boot$Coefficient[4],
+                    boot$Coefficient[1],
+                    boot$Coefficient[1] + boot$Coefficient[3]))
+ggplot(boot.df,
+       aes(x = visit, y = values, color = project, group = project)) +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 24)) +
+  geom_text(aes(label = round(values, 3)), vjust = 0.75,
+            position = position_dodge(width = 1), size = 5) +
+  theme(legend.position = "bottom") + 
+  ggtitle("Predicted Value") +
+  theme_xaringan()
+```
+]
+.pull-right[
+```{r echo=F}
+boot %>% knitr::kable(caption = "100 Bootstrap Parameters")
+```
+]
+
+---
+### T1
+.pull-left[
+```{r echo=F, warning=F}
+set.seed(1234)
+boot <- 
+  parameters::bootstrap_parameters(lme2, iterations = 100, bootstrap = T, test = "p")
+
+boot.df <- tibble(visit = rep(c("k6_first", "k6_last"), 2),
+                  project = rep(c("Hub", "Control"), each = 2),
+                  values = c(
+                    boot$Coefficient[1] + boot$Coefficient[2],
+                    boot$Coefficient[1] + boot$Coefficient[2] + 
+                      boot$Coefficient[3] + boot$Coefficient[4],
+                    boot$Coefficient[1],
+                    boot$Coefficient[1] + boot$Coefficient[3]))
+ggplot(boot.df,
+       aes(x = visit, y = values, color = project, group = project)) +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 25)) +
+  geom_text(aes(label = round(values, 3)), vjust = 0.75,
+            position = position_dodge(width = 1), size = 5) +
+  ggtitle("Predicted Value") +
+  theme(legend.position = "bottom") + 
+  theme_xaringan()
+```
+]
+.pull-right[
+```{r echo=F}
+boot %>% knitr::kable(caption = "100 Bootstrap Parameters")
+```
+]
+
+
+---
+### T2
+.pull-left[
+```{r echo=F, warning=F}
+set.seed(1234)
+boot <- 
+  parameters::bootstrap_parameters(lme3, iterations = 100, bootstrap = T, test = "p")
+
+boot.df <- tibble(visit = rep(c("k6_first", "k6_last"), 2),
+                  project = rep(c("Hub", "Control"), each = 2),
+                  values = c(
+                    boot$Coefficient[1] + boot$Coefficient[2],
+                    boot$Coefficient[1] + boot$Coefficient[2] + 
+                      boot$Coefficient[3] + boot$Coefficient[4],
+                    boot$Coefficient[1],
+                    boot$Coefficient[1] + boot$Coefficient[3]))
+ggplot(boot.df,
+       aes(x = visit, y = values, color = project, group = project)) +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 25)) +
+  geom_text(aes(label = round(values, 3)), vjust = 0.75,
+            position = position_dodge(width = 1), size = 5) +
+  ggtitle("Predicted Value") +
+  theme(legend.position = "bottom") + 
+  theme_xaringan()
+```
+]
+.pull-right[
+```{r echo=F}
+boot %>% knitr::kable(caption = "100 Bootstrap Parameters")
+```
+]
+---
+### T3
+.pull-left[
+```{r echo=F, warning=F}
+set.seed(1234)
+boot <- 
+  parameters::bootstrap_parameters(lme4, iterations = 100, bootstrap = T, test = "p")
+
+boot.df <- tibble(visit = rep(c("k6_first", "k6_last"), 2),
+                  project = rep(c("Hub", "Control"), each = 2),
+                  values = c(
+                    boot$Coefficient[1] + boot$Coefficient[2],
+                    boot$Coefficient[1] + boot$Coefficient[2] + 
+                      boot$Coefficient[3] + boot$Coefficient[4],
+                    boot$Coefficient[1],
+                    boot$Coefficient[1] + boot$Coefficient[3]))
+ggplot(boot.df,
+       aes(x = visit, y = values, color = project, group = project)) +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 25)) +
+  geom_text(aes(label = round(values, 3)), vjust = 0.75,
+            position = position_dodge(width = 1), size = 5) +
+  ggtitle("Predicted Value") +
+  theme(legend.position = "bottom") + 
+  theme_xaringan()
+```
+]
+.pull-right[
+```{r echo=F}
+boot %>% knitr::kable(caption = "100 Bootstrap Parameters")
+```
+]
