@@ -23,7 +23,7 @@ knitr::opts_chunk$set(dpi= 300, fig.align = 'center')
 library(xaringanthemer); library(tidyverse)
 library(lme4);library(sjPlot);library(gtsummary);
 library(ggpubr)
-load("join_yes_perm1.rdata")
+load("join_yes_hub_lmm.rdata")
 style_mono_accent(
   base_color = "#1c5253",
   header_font_google = google_font("Josefin Sans"),
@@ -151,11 +151,13 @@ tab_model(lme4)
 ```
 ]
 ---
-### Descriptive for crude data (YES = 1551, Hub = 1225)
+### Descriptive for crude data (YES = 1425, Hub = 1551)
 #### Model built using different setting
 - Include all age in hub
 - Add baseline K6 as a random intercept
 - Bootstrapped parameters (100 times)
+- Cohen's f^2 is the effect size of fixed effects (i.e., project, visit)
+- Interpret the magnitude effect of one predictors, refer to betas
 
 .pull-left[
 ```{r echo=F}
@@ -276,7 +278,7 @@ ggplot(boot.df,
 ]
 .pull-right[
 ```{r echo=F}
-boot %>% knitr::kable(caption = "100 Bootstrap Parameters")
+boot %>% knitr::kable(caption = "100 Bootstrap Parameters", digits = 4)
 ```
 ]
 
@@ -317,7 +319,7 @@ ggplot(boot.df,
 ]
 .pull-right[
 ```{r echo=F}
-boot %>% knitr::kable(caption = "100 Bootstrap Parameters")
+boot %>% knitr::kable(caption = "100 Bootstrap Parameters", digits = 4)
 ```
 ]
 
@@ -360,7 +362,7 @@ ggplot(boot.df,
 ]
 .pull-right[
 ```{r echo=F}
-boot %>% knitr::kable(caption = "100 Bootstrap Parameters")
+boot %>% knitr::kable(caption = "100 Bootstrap Parameters", digits = 4)
 ```
 ]
 ---
@@ -401,6 +403,263 @@ ggplot(boot.df,
 ]
 .pull-right[
 ```{r echo=F}
-boot %>% knitr::kable(caption = "100 Bootstrap Parameters")
+boot %>% knitr::kable(caption = "100 Bootstrap Parameters", digits = 4)
+```
+]
+
+---
+### Descriptive for crude data vs ICY (Hub = 1551, non- Hub = 512)
+#### Model built using different setting
+- Include all age in hub
+- Add baseline K6, baseline professional service usage as random intercepts
+- Bootstrapped parameters (100 times)
+- Cohen's f^2 is the effect size of fixed effects (i.e., project, visit)
+- Interpret the magnitude effect of one predictors, refer to betas
+
+.pull-left[
+```{r echo=F}
+df_join_pre <- 
+      df_2m_last %>% 
+      janitor::clean_names() %>% 
+      select(subject_code, k6_last) %>% 
+      left_join(df_2m_first %>% 
+                  janitor::clean_names() %>% 
+                  select(subject_code, k6_first, k6_tier_sc, 
+                         doa_bl, prof_service),
+                by = "subject_code") %>% 
+      mutate(project = 1) %>% 
+      union_all(
+        icy_last %>% 
+          janitor::clean_names() %>% 
+          select(subject_code, k6_last) %>% 
+          left_join(icy_first %>% 
+                      janitor::clean_names() %>% 
+                      select(subject_code, k6_first, k6_tier_sc,
+                             doa_bl, prof_service),
+                    by = "subject_code") %>% 
+          mutate(project = 0) 
+      ) %>% 
+      ungroup()
+    df_join <- 
+      df_join_pre %>%
+      mutate(tier = case_when(k6_tier_sc >= 0 & k6_tier_sc < 9 ~ "T0",
+                              k6_tier_sc >= 9 & k6_tier_sc < 11 ~ "T1",
+                              k6_tier_sc >= 11 & k6_tier_sc < 15 ~ "T2",
+                              k6_tier_sc >= 15 & k6_tier_sc <= 24 ~ "T3"),
+             hub = gsub("[^a-zA-Z]", "", subject_code),
+             project = if_else(project == 1, "Hub","Control") %>% 
+               factor(., levels = c("Hub","Control"))) %>% 
+      filter(complete.cases(.)) %>% 
+      arrange(project, desc(k6_tier_sc))
+df_join_flip <- df_join %>% pivot_longer(k6_first:k6_last,
+                     names_to = "visit", values_to = "values") %>% 
+  mutate(visit = factor(visit, levels = c("k6_first", "k6_last")))
+
+df_join_flip$project <- relevel(df_join_flip$project, ref = "Control")
+
+#tab_xtab(df_join_flip$project, df_join_flip$visit)
+df_join %>% 
+  select(-doa_bl, -subject_code, -hub, -k6_tier_sc) %>% 
+  select(k6_first, k6_last, everything()) %>% 
+  mutate(tier = ifelse(tier %in% c("T0", "T1"), "T1", tier)) %>% 
+  tbl_strata(strata = tier, 
+             .tbl_fun = ~ .x %>% 
+               gtsummary::tbl_summary(by = project,
+                                      statistic = all_continuous() 
+                                      ~ "{mean} ({sd})"))
+```
+]
+.pull-right[
+```{r echo=F}
+df_join %>% 
+  select(-doa_bl, -subject_code, -hub, -k6_tier_sc) %>% 
+  select(k6_first, k6_last, everything()) %>% 
+  gtsummary::tbl_summary(by = project, 
+                         statistic = all_continuous() ~ "{mean} ({sd})")
+```
+]
+```{r echo=F, warning=F, include=F}
+lme1 <- lmer(
+  values ~ project*visit  + (1|doa_bl) + (1|prof_service) + (1|k6_tier_sc), 
+             data = df_join_flip)
+
+lme2 <- lmer(
+  values ~ project*visit + (1|doa_bl) + (1|prof_service) + (1|k6_tier_sc), 
+             data = df_join_flip %>% filter(tier %in% c("T0", "T1")))
+
+lme3 <- lmer(
+  values ~ project*visit + (1|doa_bl) + (1|prof_service) + (1|k6_tier_sc), 
+             data = df_join_flip %>% filter(tier %in% c("T2")))
+
+lme4 <- lmer(
+  values ~ project*visit + (1|doa_bl) + (1|prof_service) + 
+    (1|k6_tier_sc), 
+             data = df_join_flip %>% filter(tier %in% c("T3")))
+```
+---
+### All tiers
+.pull-left[
+```{r echo=F, warning=F, message=F}
+set.seed(1234)
+boot <- 
+  parameters::bootstrap_parameters(lme1, iterations = 100, bootstrap = T, test = "p")
+null.model <- lmer(
+  values ~ 1 + (1|doa_bl) + (1|prof_service) + (1|k6_tier_sc), 
+             data = df_join_flip)
+r2 <- 
+  (summary(null.model)[["sigma"]]^2 - summary(lme1)[["sigma"]]^2)/
+  summary(null.model)[["sigma"]]^2
+f2 <- round(r2/(1-r2), 3)
+# A practical guide to calculating Cohen’s f2, a measure of local effect size, from PROC MIXED
+boot.df <- tibble(visit = rep(c("k6_first", "k6_last"), 2),
+                  project = rep(c("Hub", "Control"), each = 2),
+                  values = c(
+                    boot$Coefficient[1] + boot$Coefficient[2],
+                    boot$Coefficient[1] + boot$Coefficient[2] + 
+                    boot$Coefficient[3] + boot$Coefficient[4],
+                    boot$Coefficient[1],
+                    boot$Coefficient[1] + boot$Coefficient[3]))
+
+ggplot(boot.df,
+       aes(x = visit, y = values, color = project, group = project)) +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 24)) +
+  geom_text(aes(label = round(values, 3)), vjust = 0.75,
+            position = position_dodge(width = 1), size = 5) +
+  labs(subtitle = bquote(paste("Cohen's", " ", f[Fixed]^2, " = ", .(f2)))) + 
+  theme(legend.position = "bottom") + 
+  ggtitle("Predicted Value") +
+  theme_xaringan() 
+```
+]
+.pull-right[
+```{r echo=F}
+boot %>% knitr::kable(caption = "100 Bootstrap Parameters", digits = 4)
+```
+]
+
+---
+### T1
+.pull-left[
+```{r echo=F, warning=F, message=F}
+set.seed(1234)
+boot <- 
+  parameters::bootstrap_parameters(lme2, iterations = 100, bootstrap = T, test = "p")
+null.model <- lmer(
+  values ~ 1 + (1|doa_bl) + (1|prof_service) + (1|k6_tier_sc), 
+             data = df_join_flip %>% filter(tier %in% c("T0", "T1")))
+r2 <- 
+  (summary(null.model)[["sigma"]]^2 - summary(lme2)[["sigma"]]^2)/
+  summary(null.model)[["sigma"]]^2
+f2 <- round(r2/(1-r2), 3)
+boot.df <- tibble(visit = rep(c("k6_first", "k6_last"), 2),
+                  project = rep(c("Hub", "Control"), each = 2),
+                  values = c(
+                    boot$Coefficient[1] + boot$Coefficient[2],
+                    boot$Coefficient[1] + boot$Coefficient[2] + 
+                      boot$Coefficient[3] + boot$Coefficient[4],
+                    boot$Coefficient[1],
+                    boot$Coefficient[1] + boot$Coefficient[3]))
+ggplot(boot.df,
+       aes(x = visit, y = values, color = project, group = project)) +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 25)) +
+  geom_text(aes(label = round(values, 3)), vjust = 0.75,
+            position = position_dodge(width = 1), size = 5) +
+  labs(subtitle = bquote(paste("Cohen's", " ", f[Fixed]^2, " = ", .(f2)))) +
+  ggtitle("Predicted Value") +
+  theme(legend.position = "bottom") + 
+  theme_xaringan()
+```
+]
+.pull-right[
+```{r echo=F}
+boot %>% knitr::kable(caption = "100 Bootstrap Parameters", digits = 4)
+```
+]
+
+
+---
+### T2
+.pull-left[
+```{r echo=F, warning=F, message=F}
+set.seed(1234)
+boot <- 
+  parameters::bootstrap_parameters(lme3, iterations = 100, bootstrap = T, test = "p")
+null.model <- lmer(
+  values ~ 1 + (1|doa_bl) + (1|prof_service) + (1|k6_tier_sc), 
+             data = df_join_flip %>% filter(tier %in% c("T2")))
+r2 <- 
+  (summary(null.model)[["sigma"]]^2 - summary(lme3)[["sigma"]]^2)/
+  summary(null.model)[["sigma"]]^2
+f2 <- round(r2/(1-r2), 3)
+
+boot.df <- tibble(visit = rep(c("k6_first", "k6_last"), 2),
+                  project = rep(c("Hub", "Control"), each = 2),
+                  values = c(
+                    boot$Coefficient[1] + boot$Coefficient[2],
+                    boot$Coefficient[1] + boot$Coefficient[2] + 
+                      boot$Coefficient[3] + boot$Coefficient[4],
+                    boot$Coefficient[1],
+                    boot$Coefficient[1] + boot$Coefficient[3]))
+ggplot(boot.df,
+       aes(x = visit, y = values, color = project, group = project)) +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 25)) +
+  geom_text(aes(label = round(values, 3)), vjust = 0.75,
+            position = position_dodge(width = 1), size = 5) +
+  labs(subtitle = bquote(paste("Cohen's", " ", f[Fixed]^2, " = ", .(f2)))) +
+  ggtitle("Predicted Value") +
+  theme(legend.position = "bottom") + 
+  theme_xaringan()
+```
+]
+.pull-right[
+```{r echo=F}
+boot %>% knitr::kable(caption = "100 Bootstrap Parameters", digits = 4)
+```
+]
+---
+### T3
+.pull-left[
+```{r echo=F, warning=F, message=F}
+set.seed(1234)
+boot <- 
+  parameters::bootstrap_parameters(lme4, iterations = 100, bootstrap = T, test = "p")
+null.model <- lmer(
+  values ~ 1 + (1|doa_bl) + (1|prof_service) + (1|k6_tier_sc), 
+             data = df_join_flip %>% filter(tier %in% c("T3")))
+r2 <- 
+  (summary(null.model)[["sigma"]]^2 - summary(lme4)[["sigma"]]^2)/
+  summary(null.model)[["sigma"]]^2
+f2 <- round(r2/(1-r2), 3)
+
+boot.df <- tibble(visit = rep(c("k6_first", "k6_last"), 2),
+                  project = rep(c("Hub", "Control"), each = 2),
+                  values = c(
+                    boot$Coefficient[1] + boot$Coefficient[2],
+                    boot$Coefficient[1] + boot$Coefficient[2] + 
+                      boot$Coefficient[3] + boot$Coefficient[4],
+                    boot$Coefficient[1],
+                    boot$Coefficient[1] + boot$Coefficient[3]))
+ggplot(boot.df,
+       aes(x = visit, y = values, color = project, group = project)) +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 25)) +
+  geom_text(aes(label = round(values, 3)), vjust = 0.75,
+            position = position_dodge(width = 1), size = 5) +
+  labs(subtitle = bquote(paste("Cohen's", " ", f[Fixed]^2, " = ", .(f2)))) +
+  ggtitle("Predicted Value") +
+  theme(legend.position = "bottom") + 
+  theme_xaringan()
+```
+]
+.pull-right[
+```{r echo=F}
+boot %>% knitr::kable(caption = "100 Bootstrap Parameters", digits = 4)
 ```
 ]
